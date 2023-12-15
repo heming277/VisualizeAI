@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Attention Heatmap Analysis</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        .heatmap-container {
+            width: 600px;
+            height: 600px;
+            margin: auto;
+            position: relative;
+        }
+        .heatmap {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+        }
+
+        #tooltip {
+            position: absolute;
+            display: none;
+            padding: 4px;
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
+            border-radius: 3px;
+            font-size: 12px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Attention Scores Heatmap Analysis</h1>
+    <h2>Model: {{ model_name }}</h2>
+    <div id="text-tokens-container" style="text-align: center; margin-top: 20px;">
+        <span id="text-tokens"></span>
+    </div>
+    <div id="heatmap"></div>
+    <div id="tooltip"></div>
+    <script>
+        // Get the data, attentions is 3D array and tokens is 1D array
+        var attentions = {{ attentions | tojson | safe }};
+        var tokens = {{ tokens | tojson | safe }};
+
+        const textTokens = tokens.join(" ");
+        document.getElementById('text-tokens').textContent = textTokens;
+
+        // Build color scale
+        
+        const myColor = d3.scaleLinear()
+            .domain([0, 0.01, 1]) 
+            .range(["#fff", "#ffeda0", "#f03b20"]) 
+            .clamp(true); 
+        
+        // Create the heatmap
+        function createHeatmap(attentions, tokens) {
+            // set the dimensions and margins of the graph
+            const margin = { top: 50, right: 10, bottom: 50, left: 60 },
+                  width = 450 - margin.left - margin.right,
+                  height = 450 - margin.top - margin.bottom;
+        
+            // append the svg object to the body of the page
+            const svg = d3.select("#heatmap")
+                          .append("svg")
+                          .attr("width", width + margin.left + margin.right)
+                          .attr("height", height + margin.top + margin.bottom)
+                          .append("g")
+                          .attr("transform", `translate(${margin.left},${margin.top})`);
+        
+            // Build X scales and axis:
+            const x = d3.scaleBand()
+                        .range([ 0, width ])
+                        .domain(tokens)
+                        .padding(0.05);
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x))
+                .selectAll("text")
+                .attr("class", "x-axis-label")
+                .attr("data-token-index", (d, i) => i);
+        
+            // Build Y scales and axis:
+            const y = d3.scaleBand()
+                        .range([ height, 0 ])
+                        .domain(tokens)
+                        .padding(0.05);
+            svg.append("g")
+                .call(d3.axisLeft(y))
+                .selectAll("text")
+                .attr("class", "y-axis-label")
+                .attr("data-token-index", (d, i) => i);
+        
+            var tooltip = d3.select("#tooltip");
+            // Create the heatmap
+            attentions.forEach((layer, layerIndex) => {
+                layer.forEach((attentionRow, i) => {
+                    attentionRow.forEach((attentionScore, j) => {
+                        //accumulate data for each token pair
+                        if (!svg.selectAll(`rect[data-token-pair='${i}-${j}']`).node()) {
+                            svg.append("rect")
+                            .attr("x", x(tokens[j]))
+                            .attr("y", y(tokens[i]))
+                            .attr("width", x.bandwidth())
+                            .attr("height", y.bandwidth())
+                            .attr("data-token-pair", `${i}-${j}`) 
+                            .style("fill", myColor(0)) 
+                            .datum({ scoreSum: 0, count: 0 }); 
+                        }
+                        // Update the data
+                        const rect = svg.select(`rect[data-token-pair='${i}-${j}']`);
+                        const rectData = rect.datum();
+                        rectData.scoreSum += attentionScore;
+                        rectData.count += 1;
+                        rect.datum(rectData);
+                        // Update the color
+                        const averageScore = rectData.scoreSum / rectData.count;
+                        rect.style("fill", myColor(averageScore));
+                    });
+                });
+            });
+
+            svg.selectAll("rect")
+                .on("mouseover", function(event, d) {
+                    //dim the x-y axis
+                    d3.selectAll(".x-axis-label, .y-axis-label")
+                        .style("opacity", 0.01);
+                    // Highlight the current square
+                    const averageScore = d.scoreSum / d.count;
+                    tooltip.style("display", "block")
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY + 10) + "px")
+                            .html(averageScore.toFixed(4));
+                    // Get the indices of the current cell
+                    const indices = d3.select(this).attr("data-token-pair").split("-");
+                    const i = indices[0];
+                    const j = indices[1];
+
+                    // Show the corresponding x-axis label
+                    d3.select(`.x-axis-label[data-token-index="${j}"]`)
+                        .style("opacity", 1);
+
+                    // Show the corresponding y-axis label
+                    d3.select(`.y-axis-label[data-token-index="${i}"]`)
+                        .style("opacity", 1);
+                })
+                .on("mousemove", function(event) {
+                    // Update the position of the tooltip as the mouse moves
+                    tooltip.style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY + 10) + "px");
+                })
+                .on("mouseout", function() {
+                    // Hide the tooltip
+                    tooltip.style("display", "none");
+
+                    // restore all x-axis and y-axis labels
+                    d3.selectAll(".x-axis-label, .y-axis-label")
+                        .style("opacity", 1);
+                });
+            }
+        
+        // Create the heatmap
+        createHeatmap(attentions, tokens);
+
+        function createLegend() {
+            const legendWidth = 300;
+            const legendHeight = 20;
+            const legendMargin = { top: 10, right: 60, bottom: 30, left: 60 };
+
+            // Create the legend
+            const legendSvg = d3.select("#heatmap")
+                                .append("svg")
+                                .attr("width", legendWidth + legendMargin.left + legendMargin.right)
+                                .attr("height", legendHeight + legendMargin.top + legendMargin.bottom)
+                                .append("g")
+                                .attr("transform", `translate(${legendMargin.left},${legendMargin.top})`);
+
+            // Define the gradient
+            const gradient = legendSvg.append("defs")
+                                    .append("linearGradient")
+                                    .attr("id", "gradient")
+                                    .attr("x1", "0%")
+                                    .attr("x2", "100%")
+                                    .attr("y1", "0%")
+                                    .attr("y2", "0%");
+            const numTicks = 5;
+            const tickValues = d3.range(0, 1.01, 1 / (numTicks - 1)); 
+
+            // Add the color stops to the gradient
+            gradient.selectAll("stop")
+                    .data(myColor.ticks().map((t, i, n) => ({ offset: `${(100 * i) / n.length}%`, color: myColor(t) })))
+                    .enter().append("stop")
+                    .attr("offset", d => d.offset)
+                    .attr("stop-color", d => d.color);
+
+            // Add the gradient to the legend
+            legendSvg.append("rect")
+                    .attr("width", legendWidth)
+                    .attr("height", legendHeight)
+                    .style("fill", "url(#gradient)");
+
+            // Add the legend title
+            legendSvg.append("text")
+                    .attr("class", "legend-title")
+                    .attr("x", legendWidth / 2) 
+                    .attr("y", 0) 
+                    .attr("dy", "1em") 
+                    .attr("text-anchor", "middle") 
+                    .style("font-size", "16px")
+                    .text("Attention Scores"); 
+                                        
+            // Add the legend ticks
+            legendSvg.selectAll(".legend-label")
+                    .data(tickValues)
+                    .enter().append("text")
+                    .attr("class", "legend-label")
+                    .attr("x", d => legendWidth * d)
+                    .attr("y", legendHeight + legendMargin.bottom) 
+                    .style("text-anchor", "middle")
+                    .text(d => d.toFixed(1)); 
+            
+        }
+        createLegend();
+        </script>
+
+        <form action="/" method="get">
+            <input type="submit" value="Go Back to Homepage">
+        </form>
+</body>
+</html>

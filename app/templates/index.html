@@ -1,0 +1,39 @@
+<!-- app/templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>VisualizeAI</title>
+</head>
+<body>
+    <h1>VisualizeAI - Language Model Attention Scores Analysis Tool</h1>
+    <form action="/analyze" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <label for="model">Choose a model:</label>
+        <select name="model">
+            <option value="bert-base-uncased">BERT Base Uncased</option>
+            <option value="albert-base-v2">Albert Base V2</option>
+            <option value="roberta-base">Roberta Base</option>
+        </select>
+        <br>
+        <textarea name="text" id="text" rows="4" cols="50" placeholder="Enter text to analyze" oninput="limitWordCount(this, 100)" maxlength="600">{{ text }}</textarea>
+        <br>
+        <input type="submit" value="Analyze Text">
+    </form>
+
+
+    <script>
+        function limitWordCount(textarea, limit) {
+            var words = textarea.value.split(/\s+/); // Split by any whitespace
+            if (words.length > limit) {
+                // Truncate the array to the word limit
+                var trimmedWords = words.slice(0, limit);
+                // Update the textarea value using the trimmed words
+                textarea.value = trimmedWords.join(' ');
+                // Optionally, you could alert the user
+                alert('Only ' + limit + ' words are allowed.');
+            }
+        }
+    </script>
+</body> 
+</html>
