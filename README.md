@@ -49,7 +49,8 @@ git clone https://github.com/heming277/VisualizeAI.git
   pip install -r requirements.txt
   ```
 3. **Run in Venv**:
-  python run.py 
+  python run.py
+  Use on http://127.0.0.1:5000
 ## Documentation
 
 - **`routes.py`**: Render and send data to templates
