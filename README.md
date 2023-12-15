@@ -2,6 +2,11 @@
 
 I created an interactive web application to visualize attention scores from various fill-mask transformer models for language processing. I believe this gives some insight into how these language models work.  
 
+Note--currently the input size limited to 100 words or 600 characters becasue longer inputs take too long for visualizing of all the layers of attention scores for BERT, ALBERT, and RoBERTa, but this may be solved later. 
+
+![Example Image](index.png)
+![Example Imagee](analysis.png)
+
 ## Features
 
 - **Tech Stack**:Python,Flask,PyTorch,Hugging Face, Numpy, Javascript, Jinja, HTML, CSS, D3.js.
